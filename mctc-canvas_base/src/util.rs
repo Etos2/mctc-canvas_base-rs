@@ -1,4 +1,4 @@
-use std::io::Read;
+use std::io::{Read, Write};
 
 use crate::error::PResult;
 
@@ -55,5 +55,40 @@ impl<R: Read> ReadExt for R {
         let mut buf = vec![0; bytes];
         self.read_exact(&mut buf)?;
         Ok(buf)
+    }
+}
+
+pub trait WriteExt {
+    fn write_u8(&mut self, data: u8) -> PResult<()>;
+    fn write_u16(&mut self, data: u16) -> PResult<()>;
+    fn write_u32(&mut self, data: u32) -> PResult<()>;
+    fn write_u64(&mut self, data: u64) -> PResult<()>;
+    fn write_i64(&mut self, data: i64) -> PResult<()>;
+}
+
+impl<W: Write> WriteExt for W {
+    #[inline]
+    fn write_u8(&mut self, data: u8) -> PResult<()> {
+        Ok(self.write_all(&data.to_le_bytes())?)
+    }
+
+    #[inline]
+    fn write_u16(&mut self, data: u16) -> PResult<()> {
+        Ok(self.write_all(&data.to_le_bytes())?)
+    }
+
+    #[inline]
+    fn write_u32(&mut self, data: u32) -> PResult<()> {
+        Ok(self.write_all(&data.to_le_bytes())?)
+    }
+
+    #[inline]
+    fn write_u64(&mut self, data: u64) -> PResult<()> {
+        Ok(self.write_all(&data.to_le_bytes())?)
+    }
+
+    #[inline]
+    fn write_i64(&mut self, data: i64) -> PResult<()> {
+        Ok(self.write_all(&data.to_le_bytes())?)
     }
 }

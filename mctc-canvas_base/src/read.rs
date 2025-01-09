@@ -25,6 +25,7 @@ pub fn read_event(id: u64, value: &[u8]) -> PResult<CanvasEvent> {
     }
 }
 
+// TODO: Remove length check? Use Cursor::position to assert amount read.
 fn check_len(len: usize, expected_len: usize) -> PResult<()> {
     if len != expected_len {
         Err(PError::InvalidLength(len, expected_len))
@@ -69,7 +70,7 @@ fn read_palette_chunk(data: &[u8]) -> PResult<PaletteChunk> {
     let colors = rdr.read_vec(data.len() - 8)?;
     let colors = colors
         .chunks_exact(4)
-        .map(|chunk| u32::from_le_bytes(chunk.try_into().unwrap()))
+        .map(|chunk| chunk.try_into().unwrap())
         .collect::<Vec<_>>();
 
     check_len(data.len(), 8 + colors.len() * 4)?;
@@ -209,10 +210,7 @@ mod test {
         assert!(result.is_ok(), "parse error: {:?}", result);
         assert_eq!(result.unwrap(), PaletteChunk {
             offset: 96,
-            colors: vec![
-                u32::from_le_bytes([255, 255, 255, 255]),
-                u32::from_le_bytes([0, 0, 0, 255])
-            ]
+            colors: vec![[255, 255, 255, 255], [0, 0, 0, 255],]
         })
     }
 

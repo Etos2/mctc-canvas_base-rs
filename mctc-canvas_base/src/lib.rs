@@ -1,5 +1,6 @@
 pub mod error;
 pub mod read;
+pub mod write;
 pub(crate) mod util;
 
 pub const CANVAS_META_ID: u64 = 0x00000000;
@@ -67,7 +68,7 @@ impl CanvasEvent {
 pub struct CanvasMeta {
     pub(crate) size: (u32, u32),
     pub(crate) time_start: i64,
-    pub(crate) time_end: Option<i64>,
+    pub(crate) time_end: Option<i64>, // TODO: Remove option?
     pub(crate) name: String,
     pub(crate) platform: String,
 }
@@ -80,7 +81,7 @@ pub struct CanvasModify {
 #[derive(Debug, Clone, PartialEq)]
 pub struct PaletteChunk {
     pub(crate) offset: u64,
-    pub(crate) colors: Vec<u32>,
+    pub(crate) colors: Vec<[u8; 4]>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
