@@ -64,6 +64,7 @@ pub trait WriteExt {
     fn write_u32(&mut self, data: u32) -> PResult<()>;
     fn write_u64(&mut self, data: u64) -> PResult<()>;
     fn write_i64(&mut self, data: i64) -> PResult<()>;
+    fn write_f32(&mut self, data: f32) -> PResult<()>;
 }
 
 impl<W: Write> WriteExt for W {
@@ -89,6 +90,11 @@ impl<W: Write> WriteExt for W {
 
     #[inline]
     fn write_i64(&mut self, data: i64) -> PResult<()> {
+        Ok(self.write_all(&data.to_le_bytes())?)
+    }
+
+    #[inline]
+    fn write_f32(&mut self, data: f32) -> PResult<()> {
         Ok(self.write_all(&data.to_le_bytes())?)
     }
 }
