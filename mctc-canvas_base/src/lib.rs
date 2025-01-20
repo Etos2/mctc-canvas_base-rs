@@ -1,7 +1,14 @@
+use std::io::{Read, Write};
+
+use error::PError;
+use mctc_parser::{Codec, ReadRecord, RecordImpl, WriteRecord, data::RecordMeta};
+use read::read_event;
+use write::write_event;
+
 pub mod error;
 pub mod read;
-pub mod write;
 pub(crate) mod util;
+pub mod write;
 
 pub const CANVAS_META_ID: u64 = 0x00000000;
 pub const CANVAS_MODIFY_ID: u64 = 0x00000001;
@@ -51,7 +58,7 @@ event_from!(ModifyMatrix);
 event_from!(ModifyMap);
 
 impl CanvasEvent {
-    pub fn type_id(&self) -> u64 {
+    fn raw_id(&self) -> u64 {
         // SAFETY: Because `Self` is marked `repr(u64)` we can read the discriminant safely.
         unsafe { *<*const _>::from(self).cast::<u64>() }
     }
@@ -61,6 +68,28 @@ impl CanvasEvent {
             Self::PlacementQuiet(_) | Self::PlacementChunkQuiet(_) => true,
             _ => false,
         }
+    }
+}
+
+impl RecordImpl for CanvasEvent {
+    fn type_id(&self) -> u64 {
+        self.raw_id()
+    }
+
+    fn length(&self) -> usize {
+        todo!()
+    }
+}
+
+impl ReadRecord<PError> for CanvasEvent {
+    fn read_from(rdr: impl Read, meta: RecordMeta) -> Result<Self, PError> {
+        read_event(meta.type_id(), meta.len(), rdr)
+    }
+}
+
+impl WriteRecord<PError> for CanvasEvent {
+    fn write_into(&self, wtr: impl Write) -> Result<(), PError> {
+        write_event(wtr, self)
     }
 }
 
@@ -87,8 +116,8 @@ pub struct PaletteChunk {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Placement {
     pub(crate) pos: (u32, u32),
-    pub(crate) color_index: u16,
     pub(crate) time: i64,
+    pub(crate) color_index: u16,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -104,6 +133,15 @@ pub enum MetaId {
     Username(String),
 }
 
+impl MetaId {
+    pub fn as_bytes(&self) -> &[u8] {
+        match self {
+            MetaId::Numerical(v) => &v,
+            MetaId::Username(s) => s.as_bytes(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct ModifyMatrix {
     pub(crate) pos: (u32, u32),
@@ -116,4 +154,32 @@ pub struct ModifyMap {
     pub(crate) pos: (u32, u32),
     pub(crate) size: (u32, u32),
     pub(crate) map: Vec<(u32, u32)>,
+}
+
+pub struct CanvasBaseCodec {
+    id: u64,
+}
+
+impl CanvasBaseCodec {
+    pub fn new(id: u64) -> Self {
+        CanvasBaseCodec { id }
+    }
+}
+
+impl Codec for CanvasBaseCodec {
+    const NAME: &'static str = "CANVAS_BASE";
+    type Err = PError;
+    type Rec = CanvasEvent;
+
+    fn codec_id(&self) -> u64 {
+        self.id
+    }
+
+    fn write_record(&mut self, wtr: impl Write, rec: &Self::Rec) -> Result<(), Self::Err> {
+        rec.write_into(wtr)
+    }
+
+    fn read_record(&mut self, rdr: impl Read, meta: RecordMeta) -> Result<Self::Rec, Self::Err> {
+        CanvasEvent::read_from(rdr, meta)
+    }
 }

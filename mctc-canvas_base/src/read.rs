@@ -1,26 +1,22 @@
-use std::io::Cursor;
-
 use crate::{
     error::{PError, PResult},
     util::ReadExt,
     *,
 };
 
-pub fn read_event(id: u64, value: &[u8]) -> PResult<CanvasEvent> {
+pub fn read_event(id: u64, len: usize, rdr: impl Read) -> PResult<CanvasEvent> {
     match id {
-        CANVAS_META_ID => read_canvas_meta(value).map(CanvasEvent::from),
-        CANVAS_MODIFY_ID => read_canvas_modify(value).map(CanvasEvent::from),
-        PALETTE_CHUNK_ID => read_palette_chunk(value).map(CanvasEvent::from),
-        PLACEMENT_ID => read_placement(value).map(CanvasEvent::from),
-        PLACEMENT_QUIET_ID => read_placement(value).map(CanvasEvent::PlacementQuiet),
-        PLACEMENT_CHUNK_ID => read_placement_chunk(value).map(CanvasEvent::from),
-        PLACEMENT_CHUNK_QUIET_ID => {
-            read_placement_chunk(value).map(CanvasEvent::PlacementChunkQuiet)
-        }
-        META_ID => read_meta_id(value).map(CanvasEvent::from),
-        META_UNIQUE_ID => read_meta_id(value).map(CanvasEvent::MetaUniqueId),
-        MODIFY_MATRIX_ID => read_modify_matrix(value).map(CanvasEvent::from),
-        MODIFY_MAP_ID => read_modify_map(value).map(CanvasEvent::from),
+        CANVAS_META_ID => read_canvas_meta(rdr, len).map(CanvasEvent::from),
+        CANVAS_MODIFY_ID => read_canvas_modify(rdr, len).map(CanvasEvent::from),
+        PALETTE_CHUNK_ID => read_palette_chunk(rdr, len).map(CanvasEvent::from),
+        PLACEMENT_ID => read_placement(rdr, len).map(CanvasEvent::from),
+        PLACEMENT_QUIET_ID => read_placement(rdr, len).map(CanvasEvent::PlacementQuiet),
+        PLACEMENT_CHUNK_ID => read_placement_chunk(rdr, len).map(CanvasEvent::from),
+        PLACEMENT_CHUNK_QUIET_ID => read_placement_chunk(rdr, len).map(CanvasEvent::PlacementChunkQuiet),
+        META_ID => read_meta_id(rdr, len).map(CanvasEvent::from),
+        META_UNIQUE_ID => read_meta_id(rdr, len).map(CanvasEvent::MetaUniqueId),
+        MODIFY_MATRIX_ID => read_modify_matrix(rdr, len).map(CanvasEvent::from),
+        MODIFY_MAP_ID => read_modify_map(rdr, len).map(CanvasEvent::from),
         id => Err(PError::InvalidTypeId(id)),
     }
 }
@@ -34,9 +30,7 @@ fn check_len(len: usize, expected_len: usize) -> PResult<()> {
     }
 }
 
-fn read_canvas_meta(data: &[u8]) -> PResult<CanvasMeta> {
-    let mut rdr = Cursor::new(data);
-
+fn read_canvas_meta(mut rdr: impl Read, len: usize) -> PResult<CanvasMeta> {
     let size = (rdr.read_u32()?, rdr.read_u32()?);
     let time_start = rdr.read_i64()?;
     let time_end = rdr.read_i64().map(|t| if t > 0 { Some(t) } else { None })?; // TODO: Assert greater than time_start
@@ -45,7 +39,7 @@ fn read_canvas_meta(data: &[u8]) -> PResult<CanvasMeta> {
     let platform_len = rdr.read_u16()? as usize;
     let platform = rdr.read_vec(platform_len).map(String::from_utf8)??;
 
-    check_len(data.len(), name.len() + platform.len() + 28)?;
+    check_len(len, name.len() + platform.len() + 28)?;
     Ok(CanvasMeta {
         size,
         time_start,
@@ -55,35 +49,30 @@ fn read_canvas_meta(data: &[u8]) -> PResult<CanvasMeta> {
     })
 }
 
-fn read_canvas_modify(data: &[u8]) -> PResult<CanvasModify> {
-    let mut rdr = Cursor::new(data);
-    check_len(data.len(), 8)?;
+fn read_canvas_modify(mut rdr: impl Read, len: usize) -> PResult<CanvasModify> {
+    check_len(len, 8)?;
     Ok(CanvasModify {
         size: (rdr.read_u32()?, rdr.read_u32()?),
     })
 }
 
-fn read_palette_chunk(data: &[u8]) -> PResult<PaletteChunk> {
-    let mut rdr = Cursor::new(data);
-
+fn read_palette_chunk(mut rdr: impl Read, len: usize) -> PResult<PaletteChunk> {
     let offset = rdr.read_u64()?;
-    let colors = rdr.read_vec(data.len() - 8)?;
+    let colors = rdr.read_vec(len - 8)?;
     let colors = colors
         .chunks_exact(4)
         .map(|chunk| chunk.try_into().unwrap())
         .collect::<Vec<_>>();
 
-    check_len(data.len(), 8 + colors.len() * 4)?;
+    check_len(len, 8 + colors.len() * 4)?;
     Ok(PaletteChunk { offset, colors })
 }
 
-fn read_placement(data: &[u8]) -> PResult<Placement> {
-    let mut rdr = Cursor::new(data);
-    check_len(data.len(), 18)?;
-
+fn read_placement(mut rdr: impl Read, len: usize) -> PResult<Placement> {
+    check_len(len, 18)?;
     let pos = (rdr.read_u32()?, rdr.read_u32()?);
-    let color_index = rdr.read_u16()?;
     let time = rdr.read_i64()?;
+    let color_index = rdr.read_u16()?;
 
     Ok(Placement {
         pos,
@@ -92,17 +81,16 @@ fn read_placement(data: &[u8]) -> PResult<Placement> {
     })
 }
 
-fn read_placement_chunk(data: &[u8]) -> PResult<PlacementChunk> {
-    let mut rdr = Cursor::new(data);
+fn read_placement_chunk(mut rdr: impl Read, len: usize) -> PResult<PlacementChunk> {
     let pos = (rdr.read_u32()?, rdr.read_u32()?);
     let time = rdr.read_i64()?;
-    let color_indexes = rdr.read_vec(data.len() - 16)?;
+    let color_indexes = rdr.read_vec(len - 16)?;
     let color_indexes = color_indexes
         .chunks_exact(2)
         .map(|chunk| u16::from_le_bytes(chunk.try_into().unwrap()))
         .collect::<Vec<_>>();
-    check_len(data.len(), 16 + color_indexes.len())?;
 
+    check_len(len, 16 + color_indexes.len())?;
     Ok(PlacementChunk {
         pos,
         time,
@@ -110,11 +98,10 @@ fn read_placement_chunk(data: &[u8]) -> PResult<PlacementChunk> {
     })
 }
 
-fn read_meta_id(data: &[u8]) -> PResult<MetaId> {
-    let mut rdr = Cursor::new(data);
+fn read_meta_id(mut rdr: impl Read, len: usize) -> PResult<MetaId> {
     let layout = rdr.read_u8()?;
-    let id = rdr.read_vec(data.len() - 1)?;
-    check_len(data.len(), 1 + id.len())?;
+    let id = rdr.read_vec(len - 1)?;
+    check_len(len, 1 + id.len())?;
 
     match layout {
         0 => Ok(MetaId::Numerical(id)),
@@ -123,9 +110,8 @@ fn read_meta_id(data: &[u8]) -> PResult<MetaId> {
     }
 }
 
-fn read_modify_matrix(data: &[u8]) -> PResult<ModifyMatrix> {
-    let mut rdr = Cursor::new(data);
-    check_len(data.len(), 40)?;
+fn read_modify_matrix(mut rdr: impl Read, len: usize) -> PResult<ModifyMatrix> {
+    check_len(len, 40)?;
 
     let pos = (rdr.read_u32()?, rdr.read_u32()?);
     let size = (rdr.read_u32()?, rdr.read_u32()?);
@@ -141,9 +127,7 @@ fn read_modify_matrix(data: &[u8]) -> PResult<ModifyMatrix> {
     Ok(ModifyMatrix { pos, size, matrix })
 }
 
-fn read_modify_map(data: &[u8]) -> PResult<ModifyMap> {
-    let mut rdr = Cursor::new(data);
-
+fn read_modify_map(mut rdr: impl Read, len: usize) -> PResult<ModifyMap> {
     let pos = (rdr.read_u32()?, rdr.read_u32()?);
     let size = (rdr.read_u32()?, rdr.read_u32()?);
     let map = rdr.read_vec((size.0 * size.1 * 8) as usize)?;
@@ -156,8 +140,8 @@ fn read_modify_map(data: &[u8]) -> PResult<ModifyMap> {
             )
         })
         .collect::<Vec<_>>();
-    check_len(data.len(), 16 + (size.0 * size.1 * 8) as usize)?;
 
+    check_len(len, 16 + (size.0 * size.1 * 8) as usize)?;
     Ok(ModifyMap { pos, size, map })
 }
 
@@ -177,7 +161,7 @@ mod test {
             8, 0, //                                            Platform Name Len (8)
             b't', b'e', b's', b't', b'i', b'n', b'g', b'!', //  Platform Name
         ];
-        let result = read_canvas_meta(&data);
+        let result = read_canvas_meta(&data[..], data.len());
         assert!(result.is_ok(), "parse error: {:?}", result);
         assert_eq!(result.unwrap(), CanvasMeta {
             size: (32, 64),
@@ -194,7 +178,7 @@ mod test {
             96, 0, 0, 0, // Width (96)
             64, 0, 0, 0, // Height (64)
         ];
-        let result = read_canvas_modify(&data);
+        let result = read_canvas_modify(&data[..], data.len());
         assert!(result.is_ok(), "parse error: {:?}", result);
         assert_eq!(result.unwrap(), CanvasModify { size: (96, 64) })
     }
@@ -206,7 +190,7 @@ mod test {
             255, 255, 255, 255, //      Colors[0]
             0, 0, 0, 255, //            Colors[1]
         ];
-        let result = read_palette_chunk(&data);
+        let result = read_palette_chunk(&data[..], data.len());
         assert!(result.is_ok(), "parse error: {:?}", result);
         assert_eq!(result.unwrap(), PaletteChunk {
             offset: 96,
@@ -219,10 +203,10 @@ mod test {
         let data = [
             24, 0, 0, 0, //             X (24)
             32, 0, 0, 0, //             Y (32)
-            8, 0, //                    Color (8)
             64, 0, 0, 0, 0, 0, 0, 0, // Time Start (96)
+            8, 0, //                    Color (8)
         ];
-        let result = read_placement(&data);
+        let result = read_placement(&data[..], data.len());
         assert!(result.is_ok(), "parse error: {:?}", result);
         assert_eq!(result.unwrap(), Placement {
             pos: (24, 32),
@@ -237,7 +221,7 @@ mod test {
             0, //                       Layout
             0xD2, 0x04, 0x00, 0x00, //  ID
         ];
-        let result = read_meta_id(&data);
+        let result = read_meta_id(&data[..], data.len());
         assert!(result.is_ok(), "parse error: {:?}", result);
         assert_eq!(
             result.unwrap(),
@@ -259,7 +243,7 @@ mod test {
             0xcd, 0xcc, 0x4c, 0xc0, //  E (-3.2)
             0x00, 0x00, 0x00, 0xc3, //  F (-128.0)
         ];
-        let result = read_modify_matrix(&data);
+        let result = read_modify_matrix(&data[..], data.len());
         assert!(result.is_ok(), "parse error: {:?}", result);
         assert_eq!(result.unwrap(), ModifyMatrix {
             pos: (24, 32),
@@ -280,7 +264,7 @@ mod test {
             0x04, 0x00, 0x00, 0x00, //  X2
             0x06, 0x00, 0x00, 0x00, //  Y2
         ];
-        let result = read_modify_map(&data);
+        let result = read_modify_map(&data[..], data.len());
         assert!(result.is_ok(), "parse error: {:?}", result);
         assert_eq!(result.unwrap(), ModifyMap {
             pos: (24, 32),

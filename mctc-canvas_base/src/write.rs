@@ -2,23 +2,39 @@ use std::io::Write;
 
 use crate::{error::PResult, util::WriteExt, *};
 
-pub fn event_length(event: CanvasEvent) -> PResult<usize> {
+pub const CANVAS_MODIFY_LEN: usize = 8;
+pub const PLACEMENT_LEN: usize = 18;
+pub const MODIFY_MATRIX_LEN: usize = 40;
+
+pub const CANVAS_META_MIN_LEN: usize = 28;
+pub const PALETTE_CHUNK_MIN_LEN: usize = 8;
+pub const PLACEMENT_CHUNK_MIN_LEN: usize = 16;
+pub const META_ID_MIN_LEN: usize = 1;
+pub const MODIFY_MAP_MIN_LEN: usize = 16;
+
+// TODO: Consider not pre-calculating length? (This would involve writing into a vec, then writing to IO.)
+pub fn event_len(event: &CanvasEvent) -> usize {
     match event {
-        CanvasEvent::CanvasMeta(canvas_meta) => todo!(),
-        CanvasEvent::CanvasModify(canvas_modify) => todo!(),
-        CanvasEvent::PaletteChunk(palette_chunk) => todo!(),
-        CanvasEvent::Placement(placement) => todo!(),
-        CanvasEvent::PlacementQuiet(placement) => todo!(),
-        CanvasEvent::PlacementChunk(placement_chunk) => todo!(),
-        CanvasEvent::PlacementChunkQuiet(placement_chunk) => todo!(),
-        CanvasEvent::MetaId(meta_id) => todo!(),
-        CanvasEvent::MetaUniqueId(meta_id) => todo!(),
-        CanvasEvent::ModifyMatrix(modify_matrix) => todo!(),
-        CanvasEvent::ModifyMap(modify_map) => todo!(),
+        CanvasEvent::CanvasMeta(e) => CANVAS_META_MIN_LEN + e.name.len() + e.platform.len(),
+        CanvasEvent::CanvasModify(_) => CANVAS_MODIFY_LEN,
+        CanvasEvent::PaletteChunk(e) => {
+            PALETTE_CHUNK_MIN_LEN + e.colors.len() * (u32::BITS / 8) as usize
+        }
+        CanvasEvent::Placement(_) | CanvasEvent::PlacementQuiet(_) => PLACEMENT_LEN,
+        CanvasEvent::PlacementChunk(e) | CanvasEvent::PlacementChunkQuiet(e) => {
+            PLACEMENT_CHUNK_MIN_LEN + e.color_indexes.len() * (u16::BITS / 8) as usize
+        }
+        CanvasEvent::MetaId(e) | CanvasEvent::MetaUniqueId(e) => {
+            META_ID_MIN_LEN + e.as_bytes().len()
+        }
+        CanvasEvent::ModifyMatrix(_) => MODIFY_MATRIX_LEN,
+        CanvasEvent::ModifyMap(e) => {
+            MODIFY_MAP_MIN_LEN + e.map.len() * 2 * (u32::BITS / 8) as usize
+        }
     }
 }
 
-pub fn write_event(wtr: impl Write, event: CanvasEvent) -> PResult<()> {
+pub fn write_event(wtr: impl Write, event: &CanvasEvent) -> PResult<()> {
     match event {
         CanvasEvent::CanvasMeta(canvas_meta) => write_canvas_meta(wtr, canvas_meta),
         CanvasEvent::CanvasModify(canvas_modify) => write_canvas_modify(wtr, canvas_modify),
@@ -26,7 +42,9 @@ pub fn write_event(wtr: impl Write, event: CanvasEvent) -> PResult<()> {
         CanvasEvent::Placement(placement) => write_placement(wtr, placement),
         CanvasEvent::PlacementQuiet(placement) => write_placement(wtr, placement),
         CanvasEvent::PlacementChunk(placement_chunk) => write_placement_chunk(wtr, placement_chunk),
-        CanvasEvent::PlacementChunkQuiet(placement_chunk) => write_placement_chunk(wtr, placement_chunk),
+        CanvasEvent::PlacementChunkQuiet(placement_chunk) => {
+            write_placement_chunk(wtr, placement_chunk)
+        }
         CanvasEvent::MetaId(meta_id) => write_meta_id(wtr, meta_id),
         CanvasEvent::MetaUniqueId(meta_id) => write_meta_id(wtr, meta_id),
         CanvasEvent::ModifyMatrix(modify_matrix) => write_modify_matrix(wtr, modify_matrix),
@@ -43,7 +61,7 @@ fn cast_bytes<T>(src: &[T]) -> &[u8] {
     }
 }
 
-fn write_canvas_meta(mut wtr: impl Write, event_data: CanvasMeta) -> PResult<()> {
+fn write_canvas_meta(mut wtr: impl Write, event_data: &CanvasMeta) -> PResult<()> {
     wtr.write_u32(event_data.size.0)?;
     wtr.write_u32(event_data.size.1)?;
     wtr.write_i64(event_data.time_start)?;
@@ -56,56 +74,56 @@ fn write_canvas_meta(mut wtr: impl Write, event_data: CanvasMeta) -> PResult<()>
     Ok(())
 }
 
-fn write_canvas_modify(mut wtr: impl Write, event_data: CanvasModify) -> PResult<()> {
+fn write_canvas_modify(mut wtr: impl Write, event_data: &CanvasModify) -> PResult<()> {
     wtr.write_u32(event_data.size.0)?;
     wtr.write_u32(event_data.size.1)?;
 
     Ok(())
 }
 
-fn write_palette_chunk(mut wtr: impl Write, event_data: PaletteChunk) -> PResult<()> {
+fn write_palette_chunk(mut wtr: impl Write, event_data: &PaletteChunk) -> PResult<()> {
     wtr.write_u64(event_data.offset)?;
     wtr.write_all(cast_bytes(&event_data.colors))?;
 
     Ok(())
 }
 
-fn write_placement(mut wtr: impl Write, event_data: Placement) -> PResult<()> {
+fn write_placement(mut wtr: impl Write, event_data: &Placement) -> PResult<()> {
     wtr.write_u32(event_data.pos.0)?;
     wtr.write_u32(event_data.pos.1)?;
+    wtr.write_i64(event_data.time)?;
     wtr.write_u16(event_data.color_index)?;
-    wtr.write_i64(event_data.time)?;
-    
+
     Ok(())
 }
 
-fn write_placement_chunk(mut wtr: impl Write, event_data: PlacementChunk) -> PResult<()> {
+fn write_placement_chunk(mut wtr: impl Write, event_data: &PlacementChunk) -> PResult<()> {
     wtr.write_u32(event_data.pos.0)?;
     wtr.write_u32(event_data.pos.1)?;
     wtr.write_i64(event_data.time)?;
-    for c in event_data.color_indexes {
-        wtr.write_u16(c)?;
+    for c in &event_data.color_indexes {
+        wtr.write_u16(*c)?;
     }
- 
+
     Ok(())
 }
 
-fn write_meta_id(mut wtr: impl Write, event_data: MetaId) -> PResult<()> {
+fn write_meta_id(mut wtr: impl Write, event_data: &MetaId) -> PResult<()> {
     match event_data {
         MetaId::Numerical(int_vec) => {
             wtr.write_u8(0x00)?;
             wtr.write_all(&int_vec)?;
-        },
+        }
         MetaId::Username(user_str) => {
             wtr.write_u8(0x01)?;
             wtr.write_all(&user_str.as_bytes())?;
         }
     }
-    
+
     Ok(())
 }
 
-fn write_modify_matrix(mut wtr: impl Write, event_data: ModifyMatrix) -> PResult<()> {
+fn write_modify_matrix(mut wtr: impl Write, event_data: &ModifyMatrix) -> PResult<()> {
     wtr.write_u32(event_data.pos.0)?;
     wtr.write_u32(event_data.pos.1)?;
     wtr.write_u32(event_data.size.0)?;
@@ -118,15 +136,15 @@ fn write_modify_matrix(mut wtr: impl Write, event_data: ModifyMatrix) -> PResult
     Ok(())
 }
 
-fn write_modify_map(mut wtr: impl Write, event_data: ModifyMap) -> PResult<()> {
+fn write_modify_map(mut wtr: impl Write, event_data: &ModifyMap) -> PResult<()> {
     wtr.write_u32(event_data.pos.0)?;
     wtr.write_u32(event_data.pos.1)?;
     wtr.write_u32(event_data.size.0)?;
     wtr.write_u32(event_data.size.1)?;
 
-    for (x, y) in event_data.map {
-        wtr.write_u32(x)?;
-        wtr.write_u32(y)?;
+    for (x, y) in &event_data.map {
+        wtr.write_u32(*x)?;
+        wtr.write_u32(*y)?;
     }
 
     Ok(())
@@ -138,19 +156,35 @@ mod test {
 
     use super::*;
 
+    fn verify_write(input: CanvasEvent, output: &[u8]) {
+        // STEP 1: Write
+        let len = event_len(&input);
+        let mut wtr = Cursor::new(vec![0; len]);
+        write_event(&mut wtr, &input).expect("write error");
+
+        // STEP 2: Assert length
+        let data = wtr.into_inner();
+        assert_eq!(
+            data.len(),
+            len,
+            "length error: output was {} bytes but expected {len} bytes",
+            data.len()
+        );
+
+        // STEP 3: Assert contents
+        assert_eq!(data, output, "write error: mismatched results");
+    }
+
     #[test]
     fn test_canvas_meta() {
-        let input = CanvasMeta {
+        let input = CanvasEvent::CanvasMeta(CanvasMeta {
             size: (32, 64),
             time_start: 96,
             time_end: None,
             name: String::from("test"),
             platform: String::from("testing!"),
-        };
-        let mut wtr = Cursor::new([0; 40]);
-        let result = write_canvas_meta(&mut wtr, input);
-        assert!(result.is_ok(), "write error: {:?}", result);
-        assert_eq!(wtr.into_inner(), [
+        });
+        let output = [
             32, 0, 0, 0, //                                     Width (32)
             64, 0, 0, 0, //                                     Height (64)
             96, 0, 0, 0, 0, 0, 0, 0, //                         Time Start (Some(96 ms))
@@ -159,78 +193,86 @@ mod test {
             b't', b'e', b's', b't', //                          Name
             8, 0, //                                            Platform Name Len (8)
             b't', b'e', b's', b't', b'i', b'n', b'g', b'!', //  Platform Name
-        ])
+        ];
+        verify_write(input, &output);
     }
 
     #[test]
     fn test_canvas_modify() {
-        let input = CanvasModify { size: (96, 64) };
-        let mut wtr = Cursor::new([0; 8]);
-        let result = write_canvas_modify(&mut wtr, input);
-        assert!(result.is_ok(), "write error: {:?}", result);
-        assert_eq!(wtr.into_inner(), [
+        let input = CanvasEvent::CanvasModify(CanvasModify { size: (96, 64) });
+        let output = [
             96, 0, 0, 0, //                                     Width (32)
             64, 0, 0, 0, //                                     Height (64)
-        ])
+        ];
+        verify_write(input, &output);
     }
 
     #[test]
     fn test_palette_chunk() {
-        let input = PaletteChunk {
+        let input = CanvasEvent::PaletteChunk(PaletteChunk {
             offset: 96,
             colors: vec![[255, 255, 255, 255], [0, 0, 0, 255]],
-        };
-        let mut wtr = Cursor::new([0; 16]);
-        let result = write_palette_chunk(&mut wtr, input);
-        assert!(result.is_ok(), "write error: {:?}", result);
-        assert_eq!(wtr.into_inner(), [
+        });
+        let output = [
             96, 0, 0, 0, 0, 0, 0, 0, // Width (96)
             255, 255, 255, 255, //      Colors[0]
             0, 0, 0, 255, //            Colors[1]
-        ])
+        ];
+        verify_write(input, &output);
     }
 
     #[test]
     fn test_placement() {
-        let input = Placement {
+        let input = CanvasEvent::Placement(Placement {
             pos: (24, 32),
-            color_index: 8,
             time: 64,
-        };
-        let mut wtr = Cursor::new([0; 18]);
-        let result = write_placement(&mut wtr, input);
-        assert!(result.is_ok(), "write error: {:?}", result);
-        assert_eq!(wtr.into_inner(), [
+            color_index: 8,
+        });
+        let output = [
             24, 0, 0, 0, //             X (24)
             32, 0, 0, 0, //             Y (32)
-            8, 0, //                    Color (8)
             64, 0, 0, 0, 0, 0, 0, 0, // Time Start (96)
-        ])
+            8, 0, //                    Color (8)
+        ];
+        verify_write(input, &output);
+    }
+
+    #[test]
+    fn test_placement_chunk() {
+        let input = CanvasEvent::PlacementChunk(PlacementChunk {
+            pos: (24, 32),
+            time: 64,
+            color_indexes: vec![8, 15, 2],
+        });
+        let output = [
+            24, 0, 0, 0, //             X (24)
+            32, 0, 0, 0, //             Y (32)
+            64, 0, 0, 0, 0, 0, 0, 0, // Time Start (96)
+            8, 0, //                    Color (8)
+            15, 0, //                   Color (15)
+            2, 0, //                    Color (2)
+        ];
+        verify_write(input, &output);
     }
 
     #[test]
     fn test_meta_id() {
-        let input = MetaId::Numerical(u32::to_le_bytes(1234).to_vec());
-        let mut wtr = Cursor::new([0; 5]);
-        let result = write_meta_id(&mut wtr, input);
-        assert!(result.is_ok(), "write error: {:?}", result);
-        assert_eq!(wtr.into_inner(), [
+        let input = CanvasEvent::MetaId(MetaId::Numerical(u32::to_le_bytes(1234).to_vec()));
+        let output = [
             0, //                       Layout
             0xD2, 0x04, 0x00, 0x00, //  ID
-        ])
+        ];
+        verify_write(input, &output);
     }
 
     #[test]
     fn test_modify_matrix() {
-        let input = ModifyMatrix {
+        let input = CanvasEvent::ModifyMatrix(ModifyMatrix {
             pos: (24, 32),
             size: (255, 128),
             matrix: [1.5, 3.0, 0.0, 0.0, -3.2, -128.0],
-        };
-        let mut wtr = Cursor::new([0; 40]);
-        let result = write_modify_matrix(&mut wtr, input);
-        assert!(result.is_ok(), "write error: {:?}", result);
-        assert_eq!(wtr.into_inner(), [
+        });
+        let output = [
             24, 0, 0, 0, //             X (24)
             32, 0, 0, 0, //             Y (32)
             255, 0, 0, 0, //            Width (24)
@@ -241,20 +283,18 @@ mod test {
             0x00, 0x00, 0x00, 0x00, //  D (0.0)
             0xcd, 0xcc, 0x4c, 0xc0, //  E (-3.2)
             0x00, 0x00, 0x00, 0xc3, //  F (-128.0)
-        ])
+        ];
+        verify_write(input, &output);
     }
 
     #[test]
     fn test_modify_map() {
-        let input = ModifyMap {
+        let input = CanvasEvent::ModifyMap(ModifyMap {
             pos: (24, 32),
             size: (1, 2),
             map: vec![(0x32, 0x64), (0x04, 0x06)],
-        };
-        let mut wtr = Cursor::new([0; 32]);
-        let result = write_modify_map(&mut wtr, input);
-        assert!(result.is_ok(), "write error: {:?}", result);
-        assert_eq!(wtr.into_inner(), [
+        });
+        let output = [
             24, 0, 0, 0, //           X (24)
             32, 0, 0, 0, //           Y (32)
             1, 0, 0, 0, //            Width (24)
@@ -263,6 +303,7 @@ mod test {
             0x64, 0x00, 0x00, 0x00, //  Y1
             0x04, 0x00, 0x00, 0x00, //  X2
             0x06, 0x00, 0x00, 0x00, //  Y2
-        ])
+        ];
+        verify_write(input, &output);
     }
 }

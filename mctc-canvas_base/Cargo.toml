@@ -2,3 +2,6 @@
 name = "mctc-canvas_base"
 version = "0.1.0"
 edition = "2024"
+
+[dependencies]
+mctc-parser = { git = "https://github.com/Etos2/mctc-rs.git", rev = "8a937bef5f59407ded20d6b88b31168908afa98d" }
