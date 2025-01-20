@@ -10,6 +10,8 @@ pub mod read;
 pub(crate) mod util;
 pub mod write;
 
+pub const CURRENT_VERSION: u16 = 0;
+
 pub const CANVAS_META_ID: u64 = 0x00000000;
 pub const CANVAS_MODIFY_ID: u64 = 0x00000001;
 pub const PALETTE_CHUNK_ID: u64 = 0x00000010;
@@ -168,6 +170,7 @@ impl CanvasBaseCodec {
 
 impl Codec for CanvasBaseCodec {
     const NAME: &'static str = "CANVAS_BASE";
+    const VERSION: u16 = CURRENT_VERSION;
     type Err = PError;
     type Rec = CanvasEvent;
 
