@@ -97,36 +97,36 @@ impl WriteRecord<PError> for CanvasEvent {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct CanvasMeta {
-    pub(crate) size: (u32, u32),
-    pub(crate) time_start: i64,
-    pub(crate) time_end: Option<i64>, // TODO: Remove option?
-    pub(crate) name: String,
-    pub(crate) platform: String,
+    pub size: (u32, u32),
+    pub time_start: i64,
+    pub time_end: Option<i64>, // TODO: Remove option?
+    pub name: String,
+    pub platform: String,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct CanvasModify {
-    pub(crate) size: (u32, u32),
+    pub size: (u32, u32),
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct PaletteChunk {
-    pub(crate) offset: u64,
-    pub(crate) colors: Vec<[u8; 4]>,
+    pub offset: u64,
+    pub colors: Vec<[u8; 4]>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Placement {
-    pub(crate) pos: (u32, u32),
-    pub(crate) time: i64,
-    pub(crate) color_index: u16,
+    pub pos: (u32, u32),
+    pub time: i64,
+    pub color_index: u16,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct PlacementChunk {
-    pub(crate) pos: (u32, u32),
-    pub(crate) time: i64,
-    pub(crate) color_indexes: Vec<u16>,
+    pub pos: (u32, u32),
+    pub time: i64,
+    pub color_indexes: Vec<u16>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -146,16 +146,16 @@ impl MetaId {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ModifyMatrix {
-    pub(crate) pos: (u32, u32),
-    pub(crate) size: (u32, u32),
-    pub(crate) matrix: [f32; 6],
+    pub pos: (u32, u32),
+    pub size: (u32, u32),
+    pub matrix: [f32; 6],
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ModifyMap {
-    pub(crate) pos: (u32, u32),
-    pub(crate) size: (u32, u32),
-    pub(crate) map: Vec<(u32, u32)>,
+    pub pos: (u32, u32),
+    pub size: (u32, u32),
+    pub map: Vec<(u32, u32)>,
 }
 
 pub struct CanvasBaseCodec {
