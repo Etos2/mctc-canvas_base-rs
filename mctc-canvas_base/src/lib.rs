@@ -3,7 +3,7 @@ use std::io::{Read, Write};
 use error::PError;
 use mctc_parser::{Codec, ReadRecord, RecordImpl, WriteRecord, data::RecordMeta};
 use read::read_event;
-use write::write_event;
+use write::{event_len, write_event};
 
 pub mod error;
 pub mod read;
@@ -158,13 +158,12 @@ pub struct ModifyMap {
     pub map: Vec<(u32, u32)>,
 }
 
-pub struct CanvasBaseCodec {
-    id: u64,
-}
+// TODO: Customisability
+pub struct CanvasBaseCodec {}
 
 impl CanvasBaseCodec {
-    pub fn new(id: u64) -> Self {
-        CanvasBaseCodec { id }
+    pub fn new() -> Self {
+        CanvasBaseCodec {}
     }
 }
 
@@ -174,15 +173,19 @@ impl Codec for CanvasBaseCodec {
     type Err = PError;
     type Rec = CanvasEvent;
 
-    fn codec_id(&self) -> u64 {
-        self.id
+    fn type_id(&self, rec: &Self::Rec) -> u64 {
+        rec.raw_id()
     }
 
-    fn write_record(&mut self, wtr: impl Write, rec: &Self::Rec) -> Result<(), Self::Err> {
+    fn size(&self, rec: &Self::Rec) -> usize {
+        event_len(rec)
+    }
+
+    fn write_value(&mut self, wtr: impl Write, rec: &Self::Rec) -> Result<(), Self::Err> {
         rec.write_into(wtr)
     }
 
-    fn read_record(&mut self, rdr: impl Read, meta: RecordMeta) -> Result<Self::Rec, Self::Err> {
+    fn read_value(&mut self, rdr: impl Read, meta: RecordMeta) -> Result<Self::Rec, Self::Err> {
         CanvasEvent::read_from(rdr, meta)
     }
 }
