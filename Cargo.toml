@@ -1,5 +1,5 @@
 [workspace]
 resolver = "2"
 members = [
-    "mctc-canvas_base",
+    "msrf_canvas_base",
 ]
