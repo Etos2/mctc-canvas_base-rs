@@ -1,7 +1,5 @@
 use std::num::NonZeroU32;
 
-use msrf_io::{ByteStream, MutByteStream, RecordSerialise};
-
 use super::Error;
 use crate::{
     CanvasMeta, CanvasRecord, PaletteInsert, PaletteRemove, PlacementInsert, PlacementInsertFill,

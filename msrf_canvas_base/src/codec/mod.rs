@@ -1,4 +1,8 @@
-use std::{fmt::Display, str::Utf8Error};
+use std::{fmt::Display, io::Write, str::Utf8Error};
+
+use msrf::error::IoError;
+
+use crate::CanvasMeta;
 
 mod v0_0;
 
@@ -34,4 +38,16 @@ impl From<Utf8Error> for Error {
     fn from(value: Utf8Error) -> Self {
         Error::InvalidUTF8(value)
     }
+}
+// pub trait RawSerialiser {
+//     fn write_source_add<W: Write>(&self, rec: &SourceAdd, wtr: W) -> Result<(), IoError<DesError>>;
+//     fn write_source_remove<W: Write>(
+//         &self,
+//         rec: &SourceRemove,
+//         wtr: W,
+//     ) -> Result<(), IoError<DesError>>;
+// }
+
+pub trait RawSerialiser {
+    fn write_canvas_meta<W: Write>(&self, rec: CanvasMeta, wtr: W) -> Result<(), IoError<Error>>;
 }
